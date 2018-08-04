@@ -57,6 +57,8 @@ int _ryAxis = 0;
 void setup()
 {
   size_t i;
+  /* Read slave state from Serial1. */
+  Serial1.begin(9600);
   // Initialize Button Pins
   for (i = 0; i < MASTER_BUTTON_COUNT; i++) {
     pinMode(_pins[i], INPUT);
@@ -73,18 +75,17 @@ void setup()
   Joystick.setRyAxisRange(AXIS_MIN, AXIS_MAX);
 }
 
-int _slaveReport;
 void loop()
 {
   size_t i;
   int curBit = 1;
-  int state;
+  int state = 0, slaveState = 0;
   bool hatChanged = false;
   /* Read serial from slave */
-  if (Serial.available() > 0) {
-    Serial.readBytes((char *)&_slaveReport, sizeof(_slaveReport));
+  if (Serial1.available() > 0) {
+    Serial1.readBytes((char *)&slaveState, sizeof(slaveState));
     for (i = 0; i < SLAVE_BUTTON_COUNT; i++) {
-      if ((_slaveReport & curBit)) {
+      if ((slaveState & curBit)) {
         if (!_slave_states[i]) {
           _slave_states[i] = 1;
           Joystick.setButton(_slave_buttons[i], 1);
@@ -95,6 +96,9 @@ void loop()
       }
       curBit <<= 1;
     }
+    /* Reset to reuse variables. */
+    curBit = 1;
+    slaveState = 0;
   }
 
   /* Joysticks */
@@ -127,32 +131,50 @@ void loop()
         hatChanged = true;
       _hat_states[i] = state;
     }
+    /* Reuse slave state as HAT position */
+    if (state)
+      slaveState |= curBit;
+    curBit <<= 1;
   }
   /* HAT: -1 is nothing pressed, otherwise set in degrees from 0-360 */
-  /* TODO: Algorithm */
   if (hatChanged) {
-    if (_hat_states[0]) {
-      if (_hat_states[3]) {
-        Joystick.setHatSwitch(0, 315);
-      } else if (_hat_states[1]) {
-        Joystick.setHatSwitch(0, 45);
-      } else {
+    switch (slaveState) {
+      /* DPAD 1: 0 degrees */
+      case 0b0001:
         Joystick.setHatSwitch(0, 0);
-      }
-    } else if (_hat_states[2]) {
-      if (_hat_states[3]) {
-        Joystick.setHatSwitch(0, 225);
-      } else if (_hat_states[1]) {
+        break;
+      /* DPAD 1+2: 45 degrees */
+      case 0b0011:
+        Joystick.setHatSwitch(0, 45);
+        break;
+      /* DPAD 2: 90 degrees */
+      case 0b0010:
+        Joystick.setHatSwitch(0, 90);
+        break;
+      /* DPAD 2+3: 135 degrees */
+      case 0b0110:
         Joystick.setHatSwitch(0, 135);
-      } else {
+        break;
+      /* DPAD 3: 180 degrees */
+      case 0b0100:
         Joystick.setHatSwitch(0, 180);
-      }
-    } else if (_hat_states[3]) {
-      Joystick.setHatSwitch(0, 270);
-    } else if (_hat_states[1]) {
-      Joystick.setHatSwitch(0, 90);
-    } else {
-      Joystick.setHatSwitch(0, -1);
+        break;
+      /* DPAD 3+4: 225 degrees */
+      case 0b1100:
+        Joystick.setHatSwitch(0, 225);
+        break;
+      /* DPAD 4: 270 degrees */
+      case 0b1000:
+        Joystick.setHatSwitch(0, 270);
+        break;
+      /* DPAD 4+1: 315 degrees */
+      case 0b1001:
+        Joystick.setHatSwitch(0, 315);
+        break;
+      /* No HATS pressed, or invalid combination */
+      default:
+        Joystick.setHatSwitch(0, -1);
+        break;
     }
   }
 
