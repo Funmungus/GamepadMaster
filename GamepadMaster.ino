@@ -1,4 +1,7 @@
 #include <Joystick.h>
+/* Y axis Joysticks have reversed analog signal directions */
+//#define Y_AXIS_FLIPPED
+
 /* Master: 8
  *  Dpad: 4 (not buttons)
  *  buttons 0-3
@@ -53,6 +56,10 @@ int _ryAxis = 0;
 /* Adjust analog for parasitic resistance */
 #define AXIS_MIN 42
 #define AXIS_MAX 1019
+#ifdef Y_AXIS_FLIPPED
+int _mid_y_axis;
+int _mid_ry_axis;
+#endif
 
 void setup()
 {
@@ -73,6 +80,11 @@ void setup()
   Joystick.setYAxisRange(AXIS_MIN, AXIS_MAX);
   Joystick.setRxAxisRange(AXIS_MIN, AXIS_MAX);
   Joystick.setRyAxisRange(AXIS_MIN, AXIS_MAX);
+#ifdef Y_AXIS_FLIPPED
+  /* Remember center point for adjustments */
+  _mid_y_axis = analogRead(Y_PIN);
+  _mid_ry_axis = analogRead(RY_PIN);
+#endif
 }
 
 void loop()
@@ -108,6 +120,11 @@ void loop()
     Joystick.setXAxis(state);
   }
   state = analogRead(Y_PIN);
+  /* Y axis joystick may have backwards resistance. */
+#ifdef Y_AXIS_FLIPPED
+  if (state != _mid_y_axis)
+    state = state > _mid_y_axis ? _mid_y_axis - (state - _mid_y_axis) : _mid_y_axis + (_mid_y_axis - state);
+#endif
   if (state != _yAxis) {
     _yAxis = state;
     Joystick.setYAxis(state);
@@ -118,6 +135,11 @@ void loop()
     Joystick.setRxAxis(state);
   }
   state = analogRead(RY_PIN);
+  /* Y axis joystick may have backwards resistance. */
+#ifdef Y_AXIS_FLIPPED
+  if (state != _mid_ry_axis)
+    state = state > _mid_ry_axis ? _mid_ry_axis - (state - _mid_ry_axis) : _mid_ry_axis + (_mid_ry_axis - state);
+#endif
   if (state != _ryAxis) {
     _ryAxis = state;
     Joystick.setRyAxis(state);
